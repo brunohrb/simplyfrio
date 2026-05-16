@@ -32,12 +32,26 @@ const icons = {
   upload: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gray)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
   download: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
   shirt: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg>`,
+  ticket: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>`,
+  image: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`,
 }
 
 // ─── State ───────────────────────────────────
 let currentUser = null
 let currentPage = ''
 let categories = []
+
+// Coupon/portal state
+let couponState = null  // { id, code, uses_remaining, uses_total } when in portal mode
+
+// Cenários do provador
+const SCENARIOS = [
+  { label: 'Torre Eiffel', bg: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1080&q=80&fit=crop&crop=center' },
+  { label: 'Castelo',      bg: 'https://images.unsplash.com/photo-1548681528-6a5c45b66063?w=1080&q=80&fit=crop&crop=center' },
+  { label: 'Praia',        bg: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1080&q=80&fit=crop&crop=center' },
+  { label: 'Bar',          bg: 'https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=1080&q=80&fit=crop&crop=center' },
+  { label: 'Café',         bg: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1080&q=80&fit=crop&crop=center' },
+]
 
 // ─── Auth ────────────────────────────────────
 function getSession() {
@@ -81,6 +95,7 @@ function buildSidebar() {
     { page: 'vendas',    icon: icons.cart,      label: 'Vendas' },
     ...(currentUser.role === 'admin' ? [{ page: 'financeiro', icon: icons.chart, label: 'Financeiro' }] : []),
     { page: 'provador',  icon: icons.camera,    label: 'Provador Virtual' },
+    ...(currentUser.role === 'admin' ? [{ page: 'cupons', icon: icons.ticket, label: 'Cupons de Acesso' }] : []),
   ]
 
   document.getElementById('sidebar-logo').innerHTML = `
@@ -1229,7 +1244,15 @@ function renderProvador() {
             <div style="display:flex;gap:8px;margin-top:10px">
               <button class="btn-secondary" style="flex:1;justify-content:center" onclick="document.getElementById('photo-input').click()">Trocar foto</button>
               ${composited ? `<button class="btn-primary" onclick="downloadResult()">${icons.download} Salvar</button>` : ''}
-            </div>` : ''}
+            </div>
+            ${composited ? `
+            <div style="margin-top:12px">
+              <div style="font-size:12px;color:var(--gray);margin-bottom:8px;font-weight:600">🎨 Trocar Cenário</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                ${SCENARIOS.map(s=>`<button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="applyScenario('${s.bg}','result-img')">${s.label}</button>`).join('')}
+              </div>
+              <div id="scenario-status" style="font-size:12px;color:var(--gray);margin-top:6px"></div>
+            </div>` : ''}` : ''}
         </div>
         ${customerPhoto && selectedItem ? `
           <button class="btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:15px" onclick="tryOn()" id="btn-tryon">
@@ -1350,6 +1373,7 @@ const pages = {
   vendas:     pageVendas,
   financeiro: pageFinanceiro,
   provador:   pageProvador,
+  cupons:     pageCupons,
 }
 
 // ─────────────────────────────────────────────
@@ -1377,6 +1401,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   })
 
+  // Portal mode: ?cupom=CODE in URL
+  const urlCoupon = new URLSearchParams(window.location.search).get('cupom')
+  if (urlCoupon) {
+    checkCouponAndEnter(urlCoupon)
+    return
+  }
+
   // Check existing session
   const saved = getSession()
   if(saved) {
@@ -1392,6 +1423,357 @@ document.addEventListener('DOMContentLoaded', () => {
     else { inp.type='password'; btn.textContent='👁' }
   })
 })
+
+// ─────────────────────────────────────────────
+// COUPON PORTAL
+// ─────────────────────────────────────────────
+async function checkCouponAndEnter(code) {
+  const app = document.getElementById('app-screen')
+  const login = document.getElementById('login-screen')
+  login.style.display = 'none'
+  app.style.display = 'block'
+  app.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--navy)">
+    <div style="text-align:center;color:var(--gray)">Verificando cupom...</div>
+  </div>`
+  const { data, error } = await db.from('provador_tokens').select('*').eq('code', code.toUpperCase()).maybeSingle()
+  if (error || !data) {
+    app.innerHTML = renderCouponEntry('Cupom inválido ou não encontrado.')
+    return
+  }
+  if (data.uses_remaining <= 0) {
+    app.innerHTML = renderCouponEntry('Este cupom já foi totalmente utilizado.')
+    return
+  }
+  if (data.expires_at && new Date(data.expires_at) < new Date()) {
+    app.innerHTML = renderCouponEntry('Este cupom está expirado.')
+    return
+  }
+  couponState = data
+  startPortalMode()
+}
+
+function renderCouponEntry(errorMsg = '') {
+  return `<div style="display:flex;min-height:100vh;background:var(--navy);align-items:center;justify-content:center;padding:20px">
+    <div style="background:var(--navy-mid);border-radius:16px;padding:32px;width:100%;max-width:360px;text-align:center">
+      <div style="margin-bottom:16px">${icons.snowflake.replace('width="44" height="44"','width="52" height="52"')}</div>
+      <div style="font-size:22px;font-weight:700;color:white;margin-bottom:4px">SIMPLY FRIO</div>
+      <div style="color:var(--gray);font-size:13px;margin-bottom:24px">Provador Virtual</div>
+      ${errorMsg ? `<div style="background:rgba(229,115,115,.15);border:1px solid rgba(229,115,115,.3);border-radius:8px;padding:10px;color:#e57373;font-size:13px;margin-bottom:16px">${errorMsg}</div>` : ''}
+      <div style="text-align:left;margin-bottom:12px">
+        <label style="font-size:12px;color:var(--gray);display:block;margin-bottom:6px">Código do Cupom</label>
+        <input id="coupon-input" class="sf-input" placeholder="Ex: ABC12345" style="text-transform:uppercase;letter-spacing:2px;text-align:center;font-size:18px;font-weight:700">
+      </div>
+      <button class="btn-primary" style="width:100%;justify-content:center" onclick="checkCouponAndEnter(document.getElementById('coupon-input').value.trim())">Entrar</button>
+    </div>
+  </div>`
+}
+
+async function startPortalMode() {
+  const { data: items } = await db.from('items')
+    .select('id,name,photo_url,rental_price,sale_price,size,color,categories(name)')
+    .eq('status','disponivel')
+    .order('name')
+  const cats = (items||[]).reduce((acc, i) => {
+    const cat = (Array.isArray(i.categories)?i.categories[0]:i.categories)?.name || 'Outros'
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push({...i, categories: Array.isArray(i.categories)?i.categories[0]||null:i.categories})
+    return acc
+  }, {})
+  provador.items = (items||[]).filter(i=>i.photo_url).map(i=>({...i, categories: Array.isArray(i.categories)?i.categories[0]||null:i.categories}))
+
+  const usesLeft = couponState.uses_remaining
+  const app = document.getElementById('app-screen')
+  app.innerHTML = `
+    <div id="portal-wrap" style="min-height:100vh;background:var(--navy);padding:0 0 80px">
+      <div style="background:var(--navy-mid);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          ${icons.snowflake.replace('width="44" height="44"','width="32" height="32"')}
+          <div>
+            <div style="font-weight:700;font-size:15px;color:white">SIMPLY FRIO</div>
+            <div style="font-size:11px;color:var(--gray)">Provador Virtual</div>
+          </div>
+        </div>
+        <div style="background:rgba(74,144,217,.15);border:1px solid rgba(74,144,217,.3);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--accent)">
+          ${usesLeft} ${usesLeft===1?'teste restante':'testes restantes'}
+        </div>
+      </div>
+      <div style="max-width:960px;margin:0 auto;padding:20px 16px">
+        <div style="font-size:20px;font-weight:700;color:white;margin-bottom:4px">Experimente nossas peças</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:20px">Selecione uma peça para ver detalhes ou usar o provador virtual</div>
+        ${Object.entries(cats).map(([cat, catItems]) => `
+          <div style="margin-bottom:24px">
+            <div style="font-size:12px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">${cat}</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
+              ${catItems.map(item => `
+                <div onclick="openPortalItem(${JSON.stringify(item).replace(/"/g,'&quot;')})"
+                  style="background:var(--navy-mid);border-radius:12px;overflow:hidden;cursor:pointer;border:2px solid var(--border);transition:border-color .18s"
+                  onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                  ${item.photo_url
+                    ? `<img src="${item.photo_url}" style="width:100%;aspect-ratio:3/4;object-fit:cover;display:block">`
+                    : `<div style="width:100%;aspect-ratio:3/4;background:var(--navy-dark);display:flex;align-items:center;justify-content:center;color:var(--gray)">${icons.camera}</div>`}
+                  <div style="padding:8px">
+                    <div style="font-size:12px;font-weight:600;color:white;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.name}</div>
+                    <div style="font-size:11px;color:var(--accent);margin-top:2px">${BRL(item.rental_price)}/aluguel</div>
+                  </div>
+                </div>`).join('')}
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="modal-overlay" id="modal-portal-item" onclick="if(event.target===this)closeModal('modal-portal-item')">
+      <div class="modal" id="modal-portal-item-body"></div>
+    </div>
+    <div id="toast" class="toast"></div>`
+}
+
+function openPortalItem(item) {
+  const usesLeft = couponState.uses_remaining
+  document.getElementById('modal-portal-item-body').innerHTML = `
+    <div class="modal-header">
+      <h3>${item.name}</h3>
+      <button class="btn-icon" onclick="closeModal('modal-portal-item')">${icons.x}</button>
+    </div>
+    ${item.photo_url ? `<img src="${item.photo_url}" style="width:100%;border-radius:10px;margin-bottom:16px;aspect-ratio:3/4;object-fit:cover">` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:16px">
+      ${[['Tamanho',item.size||'—'],['Cor',item.color||'—'],['Aluguel',BRL(item.rental_price)],['Venda',item.sale_price?BRL(item.sale_price):'—']].map(([k,v])=>`<div style="background:var(--navy-dark);border-radius:8px;padding:8px 10px"><div style="color:var(--gray);font-size:11px">${k}</div><div style="color:white;font-weight:600">${v}</div></div>`).join('')}
+    </div>
+    ${item.photo_url && usesLeft > 0 ? `
+      <button class="btn-primary" style="width:100%;justify-content:center" onclick="closeModal('modal-portal-item');startPortalTryOn(${JSON.stringify(item).replace(/"/g,'&quot;')})">
+        ${icons.shirt} Experimentar no Provador Virtual (${usesLeft} ${usesLeft===1?'uso restante':'usos restantes'})
+      </button>` : usesLeft <= 0 ? `
+      <div style="text-align:center;padding:12px;background:rgba(229,115,115,.1);border-radius:8px;color:#e57373;font-size:13px">Cupom sem usos restantes</div>` : `
+      <div style="text-align:center;padding:12px;color:var(--gray);font-size:13px">Esta peça não tem foto disponível para o provador</div>`}
+  `
+  openModal('modal-portal-item')
+}
+
+async function startPortalTryOn(item) {
+  provador.selectedItem = item
+  provador.composited = null
+  provador.customerPhoto = null
+  const app = document.getElementById('app-screen')
+  app.innerHTML = `
+    <div style="min-height:100vh;background:var(--navy);padding:0 0 40px">
+      <div style="background:var(--navy-mid);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+        <button class="btn-secondary" onclick="startPortalMode()" style="gap:6px">${icons.x} Voltar ao catálogo</button>
+        <div style="font-size:13px;color:var(--accent)">${couponState.uses_remaining} ${couponState.uses_remaining===1?'uso restante':'usos restantes'}</div>
+      </div>
+      <div style="max-width:700px;margin:24px auto;padding:0 16px">
+        <div style="font-size:18px;font-weight:700;color:white;margin-bottom:16px">Experimentar: ${item.name}</div>
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <div class="section-title">${icons.upload} Sua Foto</div>
+          <div id="portal-photo-area">
+            <div class="photo-drop" onclick="document.getElementById('portal-photo-input').click()">
+              ${icons.upload}
+              <p>Clique para enviar sua foto</p>
+              <p style="font-size:11px">Foto de corpo inteiro funciona melhor</p>
+            </div>
+          </div>
+          <input type="file" id="portal-photo-input" accept="image/*" style="display:none" onchange="handlePortalPhotoUpload(event)">
+        </div>
+        <div id="portal-tryon-btn-area"></div>
+        <div id="portal-result-area"></div>
+      </div>
+    </div>
+    <div id="toast" class="toast"></div>`
+}
+
+function handlePortalPhotoUpload(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = ev => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width; canvas.height = img.height
+      canvas.getContext('2d').drawImage(img, 0, 0)
+      provador.customerPhoto = canvas.toDataURL('image/jpeg', 0.92)
+      document.getElementById('portal-photo-area').innerHTML = `
+        <div style="position:relative;border-radius:10px;overflow:hidden">
+          <img src="${provador.customerPhoto}" style="width:100%;max-height:300px;object-fit:contain;border-radius:10px">
+          <button class="btn-icon" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.5);color:white" onclick="document.getElementById('portal-photo-input').click()">${icons.edit}</button>
+        </div>`
+      document.getElementById('portal-tryon-btn-area').innerHTML = `
+        <button class="btn-primary" id="btn-portal-tryon" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="runPortalTryOn()">
+          ${icons.shirt} Experimentar agora
+        </button>`
+    }
+    img.src = ev.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
+async function runPortalTryOn() {
+  if (!provador.customerPhoto || !provador.selectedItem) return
+  if (couponState.uses_remaining <= 0) { toast('Cupom sem usos restantes', true); return }
+  const btn = document.getElementById('btn-portal-tryon')
+  if (btn) btn.disabled = true
+
+  const callTryon = (body) => fetch(`${SUPABASE_URL}/functions/v1/tryon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify(body),
+  }).then(r => r.json())
+
+  try {
+    if (btn) btn.innerHTML = `${icons.shirt} Enviando para IA...`
+    const started = await callTryon({ human_img: provador.customerPhoto, garm_img: provador.selectedItem.photo_url, garment_des: provador.selectedItem.name })
+    if (started.error) throw new Error(started.error)
+    if (!started.id) throw new Error('Predição não iniciou')
+
+    // Decrement coupon use immediately
+    await db.from('provador_tokens').update({ uses_remaining: couponState.uses_remaining - 1 }).eq('id', couponState.id)
+    couponState.uses_remaining -= 1
+
+    const startTime = Date.now()
+    let result = started
+    while (result.status !== 'succeeded' && result.status !== 'failed') {
+      if (Date.now() - startTime > 5 * 60 * 1000) throw new Error('Tempo limite atingido.')
+      await new Promise(r => setTimeout(r, 5000))
+      const elapsed = Math.round((Date.now() - startTime) / 1000)
+      if (btn) btn.innerHTML = `${icons.shirt} IA gerando... ${elapsed}s`
+      result = await callTryon({ action: 'poll', id: started.id })
+    }
+    if (result.status === 'failed') throw new Error(result.error || 'A IA falhou')
+    if (!result.output) throw new Error('IA não retornou imagem')
+
+    provador.composited = result.output
+    const usesLeft = couponState.uses_remaining
+    document.getElementById('portal-result-area').innerHTML = `
+      <div class="card" style="padding:20px;margin-top:16px">
+        <div class="section-title">${icons.shirt} Resultado</div>
+        <img id="portal-result-img" src="${result.output}" style="width:100%;border-radius:10px;margin-bottom:16px">
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;color:var(--gray);margin-bottom:8px;font-weight:600">🎨 Trocar Cenário</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${SCENARIOS.map(s=>`<button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="applyScenario('${s.bg}','portal-result-img')">${s.label}</button>`).join('')}
+          </div>
+          <div id="scenario-status" style="font-size:12px;color:var(--gray);margin-top:6px"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <a href="${result.output}" download="simplyfrio-look.jpg" class="btn-primary" style="flex:1;justify-content:center;text-decoration:none">${icons.download} Salvar foto</a>
+          ${usesLeft > 0 ? `<button class="btn-secondary" style="flex:1;justify-content:center" onclick="startPortalMode()">Ver mais peças</button>` : `<div style="flex:1;text-align:center;padding:10px;font-size:13px;color:#e57373">Cupom utilizado</div>`}
+        </div>
+      </div>`
+    if (btn) { btn.disabled = false; btn.innerHTML = `${icons.shirt} Experimentar novamente` }
+  } catch(err) {
+    toast('Erro: ' + err.message, true)
+    if (btn) { btn.disabled = false; btn.innerHTML = `${icons.shirt} Tentar novamente` }
+  }
+}
+
+// ─────────────────────────────────────────────
+// PAGE: CUPONS (admin)
+// ─────────────────────────────────────────────
+async function pageCupons() {
+  const { data: tokens } = await db.from('provador_tokens').select('*').order('created_at', { ascending: false })
+  const list = tokens || []
+  const baseUrl = window.location.origin + window.location.pathname
+
+  document.getElementById('page-content').innerHTML = `
+    <div class="page-header">
+      <div><h1>${icons.ticket} Cupons de Acesso</h1><p>Gere links para clientes testarem o provador virtualmente</p></div>
+      <button class="btn-primary" onclick="createCoupon()">${icons.plus} Novo Cupom</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      ${list.length === 0 ? `<div class="empty">${icons.ticket}<p>Nenhum cupom criado ainda.</p></div>` : `
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:12px 16px;text-align:left;font-size:12px;color:var(--gray);font-weight:600">CÓDIGO</th>
+            <th style="padding:12px 16px;text-align:left;font-size:12px;color:var(--gray);font-weight:600">USOS</th>
+            <th style="padding:12px 16px;text-align:left;font-size:12px;color:var(--gray);font-weight:600">OBSERVAÇÃO</th>
+            <th style="padding:12px 16px;text-align:left;font-size:12px;color:var(--gray);font-weight:600">CRIADO</th>
+            <th style="padding:12px 16px;text-align:left;font-size:12px;color:var(--gray);font-weight:600">AÇÕES</th>
+          </tr></thead>
+          <tbody>
+            ${list.map(t => `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:12px 16px">
+                  <span style="font-family:monospace;font-size:15px;font-weight:700;color:white;letter-spacing:2px">${t.code}</span>
+                </td>
+                <td style="padding:12px 16px">
+                  <span style="color:${t.uses_remaining>0?'var(--accent)':'#e57373'};font-weight:600">${t.uses_remaining}</span>
+                  <span style="color:var(--gray);font-size:12px"> / ${t.uses_total}</span>
+                </td>
+                <td style="padding:12px 16px;color:var(--gray);font-size:13px">${t.note||'—'}</td>
+                <td style="padding:12px 16px;color:var(--gray);font-size:12px">${new Date(t.created_at).toLocaleDateString('pt-BR')}</td>
+                <td style="padding:12px 16px">
+                  <div style="display:flex;gap:6px">
+                    <button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="copyLink('${t.code}','${baseUrl}')">Copiar link</button>
+                    <button class="btn-secondary" style="font-size:11px;padding:5px 10px;color:#e57373" onclick="deleteCoupon('${t.id}')">Excluir</button>
+                  </div>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`}
+    </div>`
+}
+
+function copyLink(code, baseUrl) {
+  const link = `${baseUrl}?cupom=${code}`
+  navigator.clipboard.writeText(link).then(() => toast('Link copiado! ' + link))
+}
+
+async function createCoupon() {
+  const code = Math.random().toString(36).slice(2,10).toUpperCase()
+  const note = prompt('Observação (opcional, ex: nome da cliente):', '') ?? ''
+  const { error } = await db.from('provador_tokens').insert({ code, note: note || null })
+  if (error) { toast('Erro ao criar cupom', true); return }
+  toast('Cupom criado: ' + code)
+  pageCupons()
+}
+
+async function deleteCoupon(id) {
+  if (!confirm('Excluir este cupom?')) return
+  await db.from('provador_tokens').delete().eq('id', id)
+  pageCupons()
+}
+
+// ─────────────────────────────────────────────
+// SCENARIOS (provador admin)
+// ─────────────────────────────────────────────
+async function applyScenario(bgUrl, imgElementId) {
+  const statusEl = document.getElementById('scenario-status')
+  if (statusEl) statusEl.textContent = 'Removendo fundo...'
+  const resultUrl = provador.composited
+  if (!resultUrl) return
+
+  const callTryon = (body) => fetch(`${SUPABASE_URL}/functions/v1/tryon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify(body),
+  }).then(r => r.json())
+
+  try {
+    const bgRes = await callTryon({ action: 'fetch-image', url: bgUrl })
+    const personRes = await callTryon({ action: 'remove-bg', image_url: resultUrl })
+    if (personRes.error || !personRes.output) throw new Error(personRes.error || 'Falha ao remover fundo')
+    if (statusEl) statusEl.textContent = 'Compondo imagem...'
+    const personB64Res = await callTryon({ action: 'fetch-image', url: personRes.output })
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const bg = new Image()
+    await new Promise(r => { bg.onload = r; bg.src = bgRes.data })
+    canvas.width = bg.width; canvas.height = bg.height
+    ctx.drawImage(bg, 0, 0)
+    const person = new Image()
+    await new Promise(r => { person.onload = r; person.src = personB64Res.data })
+    const scale = Math.min(canvas.width / person.width, canvas.height / person.height)
+    const pw = person.width * scale, ph = person.height * scale
+    ctx.drawImage(person, (canvas.width - pw) / 2, canvas.height - ph, pw, ph)
+    const composited = canvas.toDataURL('image/jpeg', 0.92)
+    provador.composited = composited
+    const imgEl = document.getElementById(imgElementId)
+    if (imgEl) imgEl.src = composited
+    if (statusEl) statusEl.textContent = ''
+    toast('Cenário aplicado!')
+  } catch(err) {
+    if (statusEl) statusEl.textContent = ''
+    toast('Erro ao trocar cenário: ' + err.message, true)
+  }
+}
 
 function startApp() {
   document.getElementById('login-screen').style.display = 'none'
