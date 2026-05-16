@@ -1289,7 +1289,6 @@ async function tryOn() {
   }).then(r => r.json())
 
   try {
-    // 1. Inicia a geração
     if(btn) btn.innerHTML = `${icons.shirt} Enviando para IA...`
     const started = await callTryon({
       human_img: customerPhoto,
@@ -1297,19 +1296,24 @@ async function tryOn() {
       garment_des: selectedItem.name,
     })
     if(started.error) throw new Error(started.error)
+    if(!started.id) throw new Error('Predição não iniciou: ' + JSON.stringify(started))
 
-    // 2. Polling via edge function até terminar (suporta cold start de 2-3 min)
-    let elapsed = 0
+    // Polling — aguarda até 5 minutos (cold start pode demorar)
+    const MAX_WAIT_MS = 5 * 60 * 1000
+    const startTime = Date.now()
     let result = started
+
     while(result.status !== 'succeeded' && result.status !== 'failed') {
+      if(Date.now() - startTime > MAX_WAIT_MS) throw new Error('Tempo limite de 5 minutos atingido. Tente novamente.')
       await new Promise(r => setTimeout(r, 5000))
-      elapsed += 5
-      if(btn) btn.innerHTML = `${icons.shirt} IA gerando... ${elapsed}s`
+      const elapsed = Math.round((Date.now() - startTime) / 1000)
+      if(btn) btn.innerHTML = `${icons.shirt} IA gerando... ${elapsed}s [${result.status||'aguardando'}]`
       result = await callTryon({ action: 'poll', id: started.id })
+      if(result.error && result.status !== 'failed') throw new Error(result.error)
     }
 
     if(result.status === 'failed') throw new Error(result.error || 'A IA falhou')
-    if(!result.output) throw new Error('IA não retornou imagem. Tente novamente.')
+    if(!result.output) throw new Error('IA não retornou imagem. Status: ' + result.status)
     provador.composited = result.output
     renderProvador()
   } catch(err) {
