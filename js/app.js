@@ -1267,9 +1267,18 @@ function handlePhotoUpload(e) {
   if(!file) return
   const reader = new FileReader()
   reader.onload = ev => {
-    provador.customerPhoto = ev.target.result
-    provador.composited = null
-    renderProvador()
+    // Converte para JPEG (garante compatibilidade com a IA — rejeita AVIF/HEIC etc.)
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      canvas.getContext('2d').drawImage(img, 0, 0)
+      provador.customerPhoto = canvas.toDataURL('image/jpeg', 0.92)
+      provador.composited = null
+      renderProvador()
+    }
+    img.src = ev.target.result
   }
   reader.readAsDataURL(file)
 }
