@@ -114,8 +114,26 @@ function navigate(page) {
   currentPage = page
   buildSidebar()
   const content = document.getElementById('page-content')
-  content.innerHTML = '<div class="empty"><p>Carregando...</p></div>'
+  // Mobile top bar
+  const initial = currentUser.full_name.charAt(0).toUpperCase()
+  const mobileBar = `<div class="mobile-topbar" style="display:none">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">${initial}</div>
+      <span style="font-size:13px;font-weight:600">Simply Frio</span>
+    </div>
+    <button class="btn-icon" onclick="logout()" title="Sair">${icons.logout}</button>
+  </div>`
+  content.innerHTML = mobileBar + '<div class="empty"><p>Carregando...</p></div>'
+  applyMobileTopbar()
   pages[page]?.()
+}
+
+function applyMobileTopbar() {
+  const bar = document.querySelector('.mobile-topbar')
+  if(bar) bar.style.display = window.innerWidth <= 768 ? 'flex' : 'none'
+  if(bar && bar.style.display !== 'none') {
+    bar.style.cssText += ';justify-content:space-between;align-items:center;padding:10px 12px 4px;margin-bottom:8px;'
+  }
 }
 
 function logout() {
