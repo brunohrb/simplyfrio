@@ -1,4 +1,4 @@
-const CACHE = 'simplyfrio-v1'
+const CACHE = 'simplyfrio-v3'
 const SHELL = [
   '/simplyfrio/',
   '/simplyfrio/index.html',
@@ -21,12 +21,25 @@ self.addEventListener('activate', e => {
 })
 
 self.addEventListener('fetch', e => {
-  // Supabase API calls: network first, no cache
+  // Supabase API calls: network only
   if (e.request.url.includes('supabase.co')) {
-    e.respondWith(fetch(e.request).catch(() => new Response('{"error":"offline"}', { headers: { 'Content-Type': 'application/json' } })))
+    e.respondWith(fetch(e.request))
     return
   }
-  // App shell: cache first, then network
+  // JS/CSS: network first so updates are always picked up
+  if (e.request.url.match(/\.(js|css)(\?|$)/)) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res.ok) {
+          const clone = res.clone()
+          caches.open(CACHE).then(c => c.put(e.request, clone))
+        }
+        return res
+      }).catch(() => caches.match(e.request))
+    )
+    return
+  }
+  // HTML and other assets: cache first
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached
