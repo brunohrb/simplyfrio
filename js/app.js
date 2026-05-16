@@ -1280,21 +1280,37 @@ async function tryOn() {
   const { customerPhoto, selectedItem } = provador
   if(!customerPhoto || !selectedItem) return
   const btn = document.getElementById('btn-tryon')
-  if(btn) { btn.disabled = true; btn.innerHTML = `${icons.shirt} IA gerando look... (~20s)` }
+  if(btn) btn.disabled = true
+
+  const callTryon = (body) => fetch(`${SUPABASE_URL}/functions/v1/tryon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify(body),
+  }).then(r => r.json())
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/tryon`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({
-        human_img: customerPhoto,
-        garm_img: selectedItem.photo_url,
-        garment_des: selectedItem.name,
-      }),
+    // 1. Inicia a geração
+    if(btn) btn.innerHTML = `${icons.shirt} Enviando para IA...`
+    const started = await callTryon({
+      human_img: customerPhoto,
+      garm_img: selectedItem.photo_url,
+      garment_des: selectedItem.name,
     })
-    const json = await res.json()
-    if (!res.ok || json.error) throw new Error(json.error || 'Erro na geração')
-    provador.composited = json.output
+    if(started.error) throw new Error(started.error)
+
+    // 2. Polling via edge function até terminar (suporta cold start de 2-3 min)
+    let elapsed = 0
+    let result = started
+    while(result.status !== 'succeeded' && result.status !== 'failed') {
+      await new Promise(r => setTimeout(r, 5000))
+      elapsed += 5
+      if(btn) btn.innerHTML = `${icons.shirt} IA gerando... ${elapsed}s`
+      result = await callTryon({ action: 'poll', id: started.id })
+    }
+
+    if(result.status === 'failed') throw new Error(result.error || 'A IA falhou')
+    if(!result.output) throw new Error('IA não retornou imagem. Tente novamente.')
+    provador.composited = result.output
     renderProvador()
   } catch(err) {
     toast('Erro no provador: ' + err.message, true)
