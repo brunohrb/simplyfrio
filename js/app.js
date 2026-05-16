@@ -203,10 +203,10 @@ async function pageDashboard() {
 
   // birthdays this month
   const curMonth = String(now.getMonth()+1).padStart(2,'0')
-  const { data: birthdays } = await db.from('customers')
+  const { data: bdRaw } = await db.from('customers')
     .select('full_name, birthday, whatsapp')
     .not('birthday','is',null)
-    .like('birthday', `%-${curMonth}-%`)
+  const birthdays = (bdRaw||[]).filter(c => String(c.birthday||'').slice(5,7) === curMonth)
 
   const statsCards = [
     { label:'Total no Estoque', value:(items||[]).length, sub:`${available} disponíveis`, color:'#4a90d9', icon: icons.package },
