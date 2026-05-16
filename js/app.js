@@ -1274,14 +1274,19 @@ function handlePhotoUpload(e) {
   reader.readAsDataURL(file)
 }
 
+const REPLICATE_KEY = 'r8_09yZUHMHwwd1kwI7703RTHZWtdX5Wxm0fFpD3'
+
 async function tryOn() {
   const { customerPhoto, selectedItem } = provador
   if(!customerPhoto || !selectedItem) return
   const btn = document.getElementById('btn-tryon')
-  if(btn) { btn.disabled=true; btn.innerHTML=`${icons.shirt} IA gerando look... aguarde ~30s` }
+  const setMsg = t => { if(btn) btn.innerHTML = `${icons.shirt} ${t}` }
+  if(btn) btn.disabled = true
+  setMsg('Enviando para IA...')
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/tryon`, {
+    // 1. Inicia a geração via edge function
+    const startRes = await fetch(`${SUPABASE_URL}/functions/v1/tryon`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
       body: JSON.stringify({
@@ -1290,13 +1295,31 @@ async function tryOn() {
         garment_des: selectedItem.name,
       }),
     })
-    const json = await res.json()
-    if (!res.ok || json.error) throw new Error(json.error || 'Erro na geração')
-    provador.composited = json.output
+    const started = await startRes.json()
+    if (!startRes.ok || started.error) throw new Error(started.error || 'Erro ao iniciar')
+
+    // 2. Polling direto na Replicate até terminar
+    let elapsed = 0
+    let prediction = started
+    while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
+      await new Promise(r => setTimeout(r, 4000))
+      elapsed += 4
+      setMsg(`IA gerando look... ${elapsed}s`)
+      const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { 'Authorization': `Bearer ${REPLICATE_KEY}` },
+      })
+      prediction = await pollRes.json()
+    }
+
+    if (prediction.status === 'failed') throw new Error(prediction.error || 'A IA falhou')
+
+    const output = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+    if (!output) throw new Error('Sem resultado da IA')
+    provador.composited = output
     renderProvador()
   } catch(err) {
-    toast('Erro no provador virtual: ' + err.message, true)
-    if(btn) { btn.disabled=false; btn.innerHTML=`${icons.shirt} Experimentar: ${selectedItem.name}` }
+    toast('Erro no provador: ' + err.message, true)
+    if(btn) { btn.disabled = false; btn.innerHTML = `${icons.shirt} Experimentar: ${selectedItem.name}` }
   }
 }
 
