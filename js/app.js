@@ -44,14 +44,6 @@ let categories = []
 // Coupon/portal state
 let couponState = null  // { id, code, uses_remaining, uses_total } when in portal mode
 
-// Cenários do provador
-const SCENARIOS = [
-  { label: 'Torre Eiffel', bg: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1080&q=80&fit=crop&crop=center' },
-  { label: 'Castelo',      bg: 'https://images.unsplash.com/photo-1548681528-6a5c45b66063?w=1080&q=80&fit=crop&crop=center' },
-  { label: 'Praia',        bg: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1080&q=80&fit=crop&crop=center' },
-  { label: 'Bar',          bg: 'https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=1080&q=80&fit=crop&crop=center' },
-  { label: 'Café',         bg: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1080&q=80&fit=crop&crop=center' },
-]
 
 // ─── Auth ────────────────────────────────────
 function getSession() {
@@ -1245,14 +1237,7 @@ function renderProvador() {
               <button class="btn-secondary" style="flex:1;justify-content:center" onclick="document.getElementById('photo-input').click()">Trocar foto</button>
               ${composited ? `<button class="btn-primary" onclick="downloadResult()">${icons.download} Salvar</button>` : ''}
             </div>
-            ${composited ? `
-            <div style="margin-top:12px">
-              <div style="font-size:12px;color:var(--gray);margin-bottom:8px;font-weight:600">🎨 Trocar Cenário</div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                ${SCENARIOS.map(s=>`<button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="applyScenario('${s.bg}','result-img')">${s.label}</button>`).join('')}
-              </div>
-              <div id="scenario-status" style="font-size:12px;color:var(--gray);margin-top:6px"></div>
-            </div>` : ''}` : ''}
+` : ''}
         </div>
         ${customerPhoto && selectedItem ? `
           <button class="btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:15px" onclick="tryOn()" id="btn-tryon">
@@ -1644,13 +1629,6 @@ async function runPortalTryOn() {
       <div class="card" style="padding:20px;margin-top:16px">
         <div class="section-title">${icons.shirt} Resultado</div>
         <img id="portal-result-img" src="${result.output}" style="width:100%;border-radius:10px;margin-bottom:16px">
-        <div style="margin-bottom:12px">
-          <div style="font-size:12px;color:var(--gray);margin-bottom:8px;font-weight:600">🎨 Trocar Cenário</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            ${SCENARIOS.map(s=>`<button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="applyScenario('${s.bg}','portal-result-img')">${s.label}</button>`).join('')}
-          </div>
-          <div id="scenario-status" style="font-size:12px;color:var(--gray);margin-top:6px"></div>
-        </div>
         <div style="display:flex;gap:8px">
           <a href="${result.output}" download="simplyfrio-look.jpg" class="btn-primary" style="flex:1;justify-content:center;text-decoration:none">${icons.download} Salvar foto</a>
           ${usesLeft > 0 ? `<button class="btn-secondary" style="flex:1;justify-content:center" onclick="startPortalMode()">Ver mais peças</button>` : `<div style="flex:1;text-align:center;padding:10px;font-size:13px;color:#e57373">Cupom utilizado</div>`}
@@ -1731,49 +1709,6 @@ async function deleteCoupon(id) {
 }
 
 // ─────────────────────────────────────────────
-// SCENARIOS (provador admin)
-// ─────────────────────────────────────────────
-async function applyScenario(bgUrl, imgElementId) {
-  const statusEl = document.getElementById('scenario-status')
-  if (statusEl) statusEl.textContent = 'Removendo fundo...'
-  const resultUrl = provador.composited
-  if (!resultUrl) return
-
-  const callTryon = (body) => fetch(`${SUPABASE_URL}/functions/v1/tryon`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-    body: JSON.stringify(body),
-  }).then(r => r.json())
-
-  try {
-    const bgRes = await callTryon({ action: 'fetch-image', url: bgUrl })
-    const personRes = await callTryon({ action: 'remove-bg', image_url: resultUrl })
-    if (personRes.error || !personRes.output) throw new Error(personRes.error || 'Falha ao remover fundo')
-    if (statusEl) statusEl.textContent = 'Compondo imagem...'
-    const personB64Res = await callTryon({ action: 'fetch-image', url: personRes.output })
-
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    const bg = new Image()
-    await new Promise(r => { bg.onload = r; bg.src = bgRes.data })
-    canvas.width = bg.width; canvas.height = bg.height
-    ctx.drawImage(bg, 0, 0)
-    const person = new Image()
-    await new Promise(r => { person.onload = r; person.src = personB64Res.data })
-    const scale = Math.min(canvas.width / person.width, canvas.height / person.height)
-    const pw = person.width * scale, ph = person.height * scale
-    ctx.drawImage(person, (canvas.width - pw) / 2, canvas.height - ph, pw, ph)
-    const composited = canvas.toDataURL('image/jpeg', 0.92)
-    provador.composited = composited
-    const imgEl = document.getElementById(imgElementId)
-    if (imgEl) imgEl.src = composited
-    if (statusEl) statusEl.textContent = ''
-    toast('Cenário aplicado!')
-  } catch(err) {
-    if (statusEl) statusEl.textContent = ''
-    toast('Erro ao trocar cenário: ' + err.message, true)
-  }
-}
 
 function startApp() {
   document.getElementById('login-screen').style.display = 'none'
