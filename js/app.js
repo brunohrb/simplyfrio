@@ -1198,7 +1198,7 @@ function renderProvador() {
         ${items.length===0 ? `<div class="empty">${icons.camera.replace('width="16" height="16"','width="36" height="36"')}<p style="font-size:13px">Nenhuma peça com foto disponível.</p><p style="font-size:12px">Adicione fotos nas peças do estoque.</p></div>` :
           `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;max-height:520px;overflow-y:auto;padding-right:4px">
             ${filtered.map(item=>`
-              <div onclick="provador.selectedItem=${JSON.stringify(item).replace(/"/g,'&quot;');};renderProvador()"
+              <div onclick="provador.selectedItem=${JSON.stringify(item).replace(/"/g,'&quot;')};renderProvador()"
                 style="border-radius:10px;overflow:hidden;cursor:pointer;border:2px solid ${selectedItem?.id===item.id?'var(--accent)':'transparent'};transition:all .18s;transform:${selectedItem?.id===item.id?'scale(1.03)':'scale(1)'}">
                 <img src="${item.photo_url}" alt="${item.name}" style="width:100%;aspect-ratio:3/4;object-fit:cover;display:block">
                 <div style="padding:6px 7px;background:${selectedItem?.id===item.id?'rgba(74,144,217,.15)':'var(--navy-dark)'}">
