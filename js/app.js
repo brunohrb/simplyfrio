@@ -340,7 +340,21 @@ function renderEstoque() {
             <div class="form-group"><label class="form-label">Preço Aluguel (R$) *</label><input class="sf-input" name="rental_price" type="number" step="0.01" required></div>
             <div class="form-group"><label class="form-label">Preço Venda (R$)</label><input class="sf-input" name="sale_price" type="number" step="0.01"></div>
             <div class="form-group"><label class="form-label">Custo de Aquisição (R$)</label><input class="sf-input" name="purchase_price" type="number" step="0.01"></div>
-            <div class="form-group full"><label class="form-label">URL da Foto</label><input class="sf-input" name="photo_url" placeholder="https://..."></div>
+            <div class="form-group full">
+              <label class="form-label">Foto</label>
+              <div id="item-photo-area" style="display:flex;gap:12px;align-items:flex-start">
+                <div id="item-photo-thumb" style="width:72px;height:90px;border-radius:8px;overflow:hidden;background:var(--navy-dark);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--gray)">
+                  ${icons.camera}
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center">
+                  <label class="btn-secondary" style="cursor:pointer;justify-content:center;width:100%">
+                    ${icons.camera} Escolher foto do computador
+                    <input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadItemPhoto(this)">
+                  </label>
+                  <button type="button" class="btn-secondary" id="btn-remove-photo" style="display:none;justify-content:center;width:100%;color:#e57373" onclick="removeItemPhoto()">Remover foto</button>
+                </div>
+              </div>
+            </div>
             <div class="form-group full"><label class="form-label">Descrição</label><textarea class="sf-input" name="description" rows="2"></textarea></div>
             <div class="form-group full"><label class="form-label">Observações</label><textarea class="sf-input" name="notes" rows="2"></textarea></div>
           </div>
@@ -373,14 +387,50 @@ function viewItem(id) {
 function openItemModal(id) {
   const item = id ? estoque.items.find(i=>i.id===id) : null
   estoque.editingItem = item
+  estoque.itemPhotoUrl = item?.photo_url || null
   document.getElementById('item-modal-title').textContent = item ? 'Editar Peça' : 'Nova Peça'
   const form = document.getElementById('form-item')
   form.reset()
   if(item) {
-    const fields = ['name','category_id','status','size','color','brand','rental_price','sale_price','purchase_price','photo_url','description','notes']
+    const fields = ['name','category_id','status','size','color','brand','rental_price','sale_price','purchase_price','description','notes']
     fields.forEach(f => { if(form[f] && item[f]!=null) form[f].value = item[f] })
   }
   openModal('modal-edit-item')
+  _refreshItemPhotoThumb()
+}
+
+function _refreshItemPhotoThumb() {
+  const thumb = document.getElementById('item-photo-thumb')
+  const btnRemove = document.getElementById('btn-remove-photo')
+  if (!thumb) return
+  if (estoque.itemPhotoUrl) {
+    thumb.innerHTML = `<img src="${estoque.itemPhotoUrl}" style="width:100%;height:100%;object-fit:cover">`
+    btnRemove.style.display = 'flex'
+  } else {
+    thumb.innerHTML = icons.camera
+    thumb.style.color = 'var(--gray)'
+    btnRemove.style.display = 'none'
+  }
+}
+
+async function uploadItemPhoto(input) {
+  const file = input.files[0]
+  if (!file) return
+  const btn = input.closest('label')
+  btn.textContent = 'Enviando...'
+  const ext = file.name.split('.').pop().toLowerCase()
+  const path = `items/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await db.storage.from('fotos').upload(path, file, { upsert: true })
+  if (error) { toast('Erro ao enviar foto', true); btn.textContent = 'Escolher foto do computador'; return }
+  const { data } = db.storage.from('fotos').getPublicUrl(path)
+  estoque.itemPhotoUrl = data.publicUrl
+  _refreshItemPhotoThumb()
+  btn.innerHTML = `${icons.camera} Escolher foto do computador<input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadItemPhoto(this)">`
+}
+
+function removeItemPhoto() {
+  estoque.itemPhotoUrl = null
+  _refreshItemPhotoThumb()
 }
 
 async function saveItem(e) {
@@ -398,7 +448,7 @@ async function saveItem(e) {
     rental_price: parseFloat(form.rental_price.value) || 0,
     sale_price: form.sale_price.value ? parseFloat(form.sale_price.value) : null,
     purchase_price: form.purchase_price.value ? parseFloat(form.purchase_price.value) : null,
-    photo_url: form.photo_url.value || null,
+    photo_url: estoque.itemPhotoUrl || null,
     description: form.description.value || null,
     notes: form.notes.value || null,
   }
