@@ -1278,42 +1278,26 @@ async function tryOn() {
   const { customerPhoto, selectedItem } = provador
   if(!customerPhoto || !selectedItem) return
   const btn = document.getElementById('btn-tryon')
-  if(btn) { btn.disabled=true; btn.innerHTML=`${icons.shirt} Processando...` }
+  if(btn) { btn.disabled=true; btn.innerHTML=`${icons.shirt} IA gerando look... aguarde ~30s` }
 
-  const canvas = document.getElementById('provador-canvas')
-  const ctx = canvas.getContext('2d')
-  const personImg = new Image()
-
-  await new Promise(res => { personImg.onload=res; personImg.src=customerPhoto })
-  canvas.width  = personImg.width
-  canvas.height = personImg.height
-  ctx.drawImage(personImg, 0, 0)
-
-  const clothImg = new Image()
-  clothImg.crossOrigin = 'anonymous'
-  await new Promise(res => {
-    clothImg.onload = () => {
-      const cW = canvas.width * 0.55
-      const cH = (clothImg.naturalHeight/clothImg.naturalWidth)*cW
-      const cX = (canvas.width-cW)/2
-      const cY = canvas.height*0.14
-      ctx.globalAlpha = 0.78
-      ctx.drawImage(clothImg, cX, cY, cW, cH)
-      ctx.globalAlpha = 1
-      ctx.fillStyle='rgba(26,39,68,0.75)'
-      ctx.fillRect(0,canvas.height-52,canvas.width,52)
-      ctx.fillStyle='white'
-      ctx.font=`bold ${Math.round(canvas.width*0.026)}px Arial`
-      ctx.textAlign='center'
-      ctx.fillText(`Simply Frio — ${selectedItem.name}`, canvas.width/2, canvas.height-18)
-      res()
-    }
-    clothImg.onerror = res
-    clothImg.src = selectedItem.photo_url
-  })
-
-  provador.composited = canvas.toDataURL('image/jpeg', 0.92)
-  renderProvador()
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/tryon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({
+        human_img: customerPhoto,
+        garm_img: selectedItem.photo_url,
+        garment_des: selectedItem.name,
+      }),
+    })
+    const json = await res.json()
+    if (!res.ok || json.error) throw new Error(json.error || 'Erro na geração')
+    provador.composited = json.output
+    renderProvador()
+  } catch(err) {
+    toast('Erro no provador virtual: ' + err.message, true)
+    if(btn) { btn.disabled=false; btn.innerHTML=`${icons.shirt} Experimentar: ${selectedItem.name}` }
+  }
 }
 
 function downloadResult() {
