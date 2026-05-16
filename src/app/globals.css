@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+:root {
+  --sf-navy: #1a2744;
+  --sf-navy-dark: #121c33;
+  --sf-navy-light: #243258;
+  --sf-accent: #4a90d9;
+  --sf-accent-light: #6ba8e5;
+  --sf-white: #ffffff;
+  --sf-gray: #8892a4;
+  --sf-gray-light: #e8edf5;
+  --sf-success: #2ecc71;
+  --sf-warning: #f39c12;
+  --sf-danger: #e74c3c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--sf-navy);
+  color: var(--sf-white);
+  font-family: 'Inter', Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--sf-navy-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sf-navy-light);
+  border-radius: 3px;
+}
+
+input, select, textarea {
+  outline: none;
+}
+
+.sf-card {
+  background: var(--sf-navy-light);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.sf-input {
+  background: var(--sf-navy-dark);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: white;
+  border-radius: 8px;
+  padding: 10px 14px;
+  width: 100%;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+.sf-input:focus {
+  border-color: var(--sf-accent);
+}
+.sf-input::placeholder {
+  color: var(--sf-gray);
+}
+
+.sf-btn-primary {
+  background: var(--sf-accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.sf-btn-primary:hover {
+  background: var(--sf-accent-light);
+  transform: translateY(-1px);
+}
+.sf-btn-primary:active {
+  transform: translateY(0);
+}
+
+.sf-btn-secondary {
+  background: transparent;
+  color: var(--sf-gray);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sf-btn-secondary:hover {
+  border-color: var(--sf-accent);
+  color: white;
+}
+
+.sf-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-disponivel  { background: rgba(46,204,113,0.15); color: #2ecc71; }
+.badge-alugado     { background: rgba(74,144,217,0.15); color: #4a90d9; }
+.badge-manutencao  { background: rgba(243,156,18,0.15); color: #f39c12; }
+.badge-vendido     { background: rgba(231,76,60,0.15);  color: #e74c3c; }
+.badge-ativo       { background: rgba(74,144,217,0.15); color: #4a90d9; }
+.badge-devolvido   { background: rgba(46,204,113,0.15); color: #2ecc71; }
+.badge-atrasado    { background: rgba(231,76,60,0.15);  color: #e74c3c; }
+.badge-cancelado   { background: rgba(139,148,158,0.15); color: #8b949e; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn { animation: fadeIn 0.25s ease; }
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-spin-slow { animation: spin-slow 8s linear infinite; }
